@@ -658,16 +658,29 @@
         }
 
         // === 评价组件逻辑 ===
+        const RATING_ACTIVE_CLASSES = ['text-[#07c160]', 'text-[#f5a623]', 'text-[#ef4444]'];
+
+        function ratingColorClass(score) {
+            const value = Number(score || 0);
+            if (value >= 5) return 'text-[#07c160]';
+            if (value >= 3) return 'text-[#f5a623]';
+            return 'text-[#ef4444]';
+        }
+
+        function resetRatingIcons() {
+            document.querySelectorAll('.eval-star i').forEach(i => {
+                i.classList.remove(...RATING_ACTIVE_CLASSES);
+                i.classList.add('text-gray-300');
+            });
+        }
+
         function showEvalSheet() {
             DOM.evalOverlay.classList.remove('hidden');
             DOM.evalOverlay.classList.add('flex');
             gsap.to(DOM.evalSheet, { y: 0, duration: 0.3, ease: "power3.out" });
             
             // 重置星星
-            document.querySelectorAll('.eval-star i').forEach(i => {
-                i.classList.remove('text-[#f5a623]');
-                i.classList.add('text-gray-300');
-            });
+            resetRatingIcons();
             State.selectedRatingScore = 0;
             DOM.evalAdvice.value = '';
             syncEvalAdviceBox();
@@ -684,14 +697,12 @@
         document.querySelectorAll('.eval-star').forEach(star => {
             star.addEventListener('click', function() {
                 // 清除所有颜色
-                document.querySelectorAll('.eval-star i').forEach(i => {
-                    i.classList.remove('text-[#f5a623]');
-                    i.classList.add('text-gray-300');
-                });
+                resetRatingIcons();
                 // 点亮当前
+                const score = Number(this.dataset.score || 0);
                 this.querySelector('i').classList.remove('text-gray-300');
-                this.querySelector('i').classList.add('text-[#f5a623]');
-                State.selectedRatingScore = Number(this.dataset.score || 0);
+                this.querySelector('i').classList.add(ratingColorClass(score));
+                State.selectedRatingScore = score;
                 syncEvalAdviceBox();
             });
         });
