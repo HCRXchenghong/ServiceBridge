@@ -95,7 +95,7 @@
         <text class="keyword-title">关键词自动回复</text>
         <text class="add" @tap="addRule">＋</text>
       </view>
-      <scroll-view class="keyword-content" scroll-y>
+      <scroll-view class="keyword-content flex-scroll" scroll-y>
         <view class="rule-card" v-for="(rule, index) in keywordRules" :key="rule.id">
           <view class="rule-card-header">
             <view class="rule-card-main">
@@ -154,6 +154,7 @@
 
           <button class="rule-save" @tap="saveRule(rule)">保存规则</button>
         </view>
+        <view class="scroll-bottom-spacer"></view>
       </scroll-view>
     </view>
 
@@ -163,7 +164,7 @@
         <text class="keyword-title">{{ contactEdit.type === 'wechat' ? '官方微信配置' : '官方QQ配置' }}</text>
         <text class="add"></text>
       </view>
-      <scroll-view class="keyword-content" scroll-y>
+      <scroll-view class="keyword-content flex-scroll" scroll-y>
         <text class="section">账号信息</text>
         <view class="group">
           <view class="item">
@@ -196,6 +197,7 @@
         <view class="actions">
           <button class="primary" @tap="saveContact">保存配置</button>
         </view>
+        <view class="scroll-bottom-spacer"></view>
       </scroll-view>
     </view>
 
@@ -208,7 +210,7 @@
           <text class="audit-action text-action" @tap="exportAudit">导出</text>
         </view>
       </view>
-      <scroll-view class="keyword-content" scroll-y>
+      <scroll-view class="keyword-content flex-scroll" scroll-y>
         <view v-if="!auditEvents.length" class="empty">暂无审计记录</view>
         <view class="audit-row" v-for="event in auditEvents" :key="event.id">
           <view class="audit-main">
@@ -220,6 +222,7 @@
             <text class="audit-actor">{{ event.actor_id || '-' }}</text>
           </view>
         </view>
+        <view class="scroll-bottom-spacer"></view>
       </scroll-view>
     </view>
 
@@ -494,11 +497,13 @@ export default {
         'agent.update': '更新客服',
         'agent.reset_password': '重置密码',
         'agent.disable': '禁用客服',
+        'agent.delete': '删除客服',
         'contact_settings.update': '更新联系方式',
         'keyword_rule.create': '新增关键词',
         'keyword_rule.update': '更新关键词',
         'conversation.remark_update': '修改备注',
         'conversation.close': '关闭会话',
+        'conversation.delete': '删除会话',
         'conversation.transfer': '转接会话',
         'ai_settings.update': '更新AI配置',
         'business_hours.update': '更新营业时间'
@@ -656,6 +661,12 @@ export default {
 }
 .keyword-content {
   flex: 1;
+  min-height: 0;
+  height: auto;
+  box-sizing: border-box;
+}
+.scroll-bottom-spacer {
+  height: calc(160rpx + env(safe-area-inset-bottom));
 }
 .textarea-block,
 .rule-textarea-block {

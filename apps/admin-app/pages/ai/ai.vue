@@ -25,7 +25,7 @@
         </view>
         <view class="item">
           <text>API Key</text>
-          <input v-model="form.api_key" password class="input" placeholder="不填则保持不变" />
+          <input v-model="form.api_key" password class="input" :placeholder="apiKeyPlaceholder" />
         </view>
         <view class="item">
           <text>Model 名称</text>
@@ -45,6 +45,14 @@
           <text>超时时间(秒)</text>
           <input v-model.number="form.timeout_seconds" type="number" class="input" />
         </view>
+        <view class="item">
+          <text>最大输出 Tokens</text>
+          <input v-model.number="form.max_output_tokens" type="number" class="input" />
+        </view>
+        <view class="item">
+          <text>无人回复转AI(秒)</text>
+          <input v-model.number="form.agent_no_reply_timeout_seconds" type="number" class="input" />
+        </view>
       </view>
 
       <text class="section">System Prompt</text>
@@ -53,8 +61,11 @@
       </view>
 
       <view class="actions">
-        <button class="secondary" @tap="test">测试接口联调</button>
+        <button class="secondary" :loading="testing" @tap="test">测试接口联调</button>
         <button class="primary" @tap="save">保存配置</button>
+        <view v-if="lastTest.message" :class="['test-result', lastTest.ok ? 'ok' : 'bad']">
+          <text>{{ lastTest.message }}</text>
+        </view>
       </view>
     </scroll-view>
     <admin-tab-bar active="ai" />
@@ -87,8 +98,11 @@ export default {
         timeout_seconds: 20,
         max_output_tokens: 512,
         system_prompt: '',
-        agent_no_reply_timeout_seconds: 60
-      }
+        agent_no_reply_timeout_seconds: 60,
+        api_key_masked: ''
+      },
+      testing: false,
+      lastTest: { ok: false, message: '' }
     }
   },
   computed: {
@@ -97,6 +111,9 @@ export default {
     },
     apiTypeIndex() {
       return Math.max(0, this.apiTypes.indexOf(this.form.api_type))
+    },
+    apiKeyPlaceholder() {
+      return this.form.api_key_masked ? `已保存 ${this.form.api_key_masked}，不填则保持不变` : '请输入 API Key'
     }
   },
   onShow() {
@@ -109,6 +126,7 @@ export default {
       this.form.mode = data.mode || this.form.mode
       this.form.base_url = data.base_url || this.form.base_url
       this.form.api_key = ''
+      this.form.api_key_masked = data.api_key_masked || ''
       this.form.model = data.model || this.form.model
       this.form.api_type = data.api_type || this.form.api_type
       this.form.temperature = typeof data.temperature === 'number' ? data.temperature : this.form.temperature
@@ -140,20 +158,60 @@ export default {
         agent_no_reply_timeout_seconds: Number(this.form.agent_no_reply_timeout_seconds) || 60
       }
     },
+    validatePayload(requireAPIKey = false) {
+      if (!String(this.form.base_url || '').trim()) return '请填写 Base URL'
+      if (!String(this.form.model || '').trim()) return '请填写 Model 名称'
+      if ((requireAPIKey || this.form.enabled) && !this.form.api_key && !this.form.api_key_masked) return '请填写 API Key'
+      if (Number(this.form.timeout_seconds) <= 0) return '超时时间必须大于 0'
+      return ''
+    },
     async save() {
-      await updateAISettings(this.payload())
-      uni.showToast({ title: 'AI 配置已保存', icon: 'none' })
-      this.load()
+      const error = this.validatePayload(false)
+      if (error) {
+        uni.showToast({ title: error, icon: 'none' })
+        return
+      }
+      try {
+        await updateAISettings(this.payload())
+        uni.showToast({ title: 'AI 配置已保存', icon: 'none' })
+        await this.load()
+      } catch (err) {
+        uni.showToast({ title: err.message || '保存失败', icon: 'none' })
+      }
     },
     async test() {
-      await updateAISettings(this.payload())
-      const data = await testAISettings('请用一句话回复：AI 接口联调是否正常。')
-      uni.showModal({
-        title: '联调成功',
-        content: data.reply || 'AI 返回 200 OK',
-        showCancel: false,
-        confirmColor: '#576b95'
-      })
+      const error = this.validatePayload(true)
+      if (error) {
+        uni.showToast({ title: error, icon: 'none' })
+        return
+      }
+      this.testing = true
+      this.lastTest = { ok: false, message: '' }
+      try {
+        uni.showLoading({ title: '联调中' })
+        await updateAISettings(this.payload())
+        const data = await testAISettings('请用一句话回复：AI 接口联调是否正常。')
+        this.lastTest = { ok: true, message: `联调成功：${data.reply || 'AI 返回 200 OK'}` }
+        uni.showModal({
+          title: '联调成功',
+          content: data.reply || 'AI 返回 200 OK',
+          showCancel: false,
+          confirmColor: '#576b95'
+        })
+        await this.load()
+      } catch (err) {
+        const message = err.message || 'AI 接口联调失败'
+        this.lastTest = { ok: false, message: `联调失败：${message}` }
+        uni.showModal({
+          title: '联调失败',
+          content: message,
+          showCancel: false,
+          confirmColor: '#ef4444'
+        })
+      } finally {
+        this.testing = false
+        uni.hideLoading()
+      }
     }
   }
 }
@@ -233,5 +291,22 @@ export default {
   color: #111827;
   border: 1px solid #d1d5db;
   margin-bottom: 20rpx;
+}
+.test-result {
+  margin-top: 20rpx;
+  border-radius: 12rpx;
+  padding: 20rpx 24rpx;
+  font-size: 26rpx;
+  line-height: 1.5;
+}
+.test-result.ok {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+.test-result.bad {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
 }
 </style>

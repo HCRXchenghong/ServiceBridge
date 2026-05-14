@@ -92,6 +92,10 @@ export function fetchDashboard() {
   return request('/api/admin/dashboard')
 }
 
+export function fetchSystemStatus() {
+  return request('/api/admin/system-status')
+}
+
 export function fetchAgents() {
   return request('/api/admin/agents')
 }
@@ -197,6 +201,12 @@ export function resetAgentPassword(id, password = '') {
 export function disableAgent(id) {
   return request(`/api/admin/agents/${id}/disable`, {
     method: 'POST'
+  })
+}
+
+export function deleteAgent(id) {
+  return request(`/api/admin/agents/${id}`, {
+    method: 'DELETE'
   })
 }
 
@@ -306,5 +316,11 @@ export function updateRemark(conversationId, remark) {
 export function closeConversation(conversationId) {
   return request(`/api/conversations/${conversationId}/close`, {
     method: 'POST'
+  })
+}
+
+export function deleteConversation(conversationId) {
+  return request(`/api/conversations/${conversationId}`, {
+    method: 'DELETE'
   })
 }

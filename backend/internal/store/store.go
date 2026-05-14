@@ -55,6 +55,7 @@ type Store interface {
 	UpdateAgent(id string, next domain.Agent) (domain.Agent, error)
 	ResetAgentPassword(id, password string) (domain.Agent, error)
 	DisableAgent(id string) (domain.Agent, error)
+	DeleteAgent(id string) (domain.Agent, error)
 	RegisterAgentPushDevice(agentID string, device domain.PushDevice) (domain.PushDevice, error)
 	PushDevicesForAgent(agentID string) []domain.PushDevice
 }

@@ -514,6 +514,52 @@ func (s *MemoryStore) DisableAgent(id string) (domain.Agent, error) {
 	return *agent, nil
 }
 
+func (s *MemoryStore) DeleteAgent(id string) (domain.Agent, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	agent, ok := s.agentsByID[id]
+	if !ok {
+		return domain.Agent{}, ErrNotFound
+	}
+	deleted := *agent
+	now := time.Now().UTC()
+	agent.Status = domain.AgentOffline
+	agent.CurrentConversations = 0
+	agent.Updated = now
+	s.revokeAuthSessionsLocked(domain.AccountAgent, agent.ID)
+	for _, conversation := range s.conversations {
+		if conversation.AssignedAgentID != id {
+			continue
+		}
+		conversation.AssignedAgentID = ""
+		if conversation.Status != domain.ConversationClosed {
+			conversation.Status = domain.ConversationWaiting
+			conversation.UpdatedAt = now
+			s.assignConversationLocked(conversation)
+			if conversation.AssignedAgentID == "" && s.ai.Enabled && s.ai.Mode != domain.AIModeManualOnly {
+				conversation.Status = domain.ConversationAIServing
+			}
+		}
+	}
+	for deviceID, device := range s.pushDevices {
+		if device.AgentID == id {
+			delete(s.pushDevices, deviceID)
+		}
+	}
+	for _, rating := range s.ratings {
+		if rating.AssignedAgentID == id {
+			rating.AssignedAgentID = ""
+		}
+	}
+	delete(s.agentsByAccount, agent.Account)
+	delete(s.agentsByID, id)
+	deleted.Status = domain.AgentOffline
+	deleted.CurrentConversations = 0
+	deleted.Updated = now
+	return deleted, nil
+}
+
 func (s *MemoryStore) RegisterAgentPushDevice(agentID string, device domain.PushDevice) (domain.PushDevice, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

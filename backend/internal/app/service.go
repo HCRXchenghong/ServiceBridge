@@ -163,6 +163,16 @@ func (s *Service) DisableAgent(id string) (domain.Agent, error) {
 	return updated, nil
 }
 
+func (s *Service) DeleteAgent(id string) (domain.Agent, error) {
+	deleted, err := s.store.DeleteAgent(id)
+	if err != nil {
+		return domain.Agent{}, err
+	}
+	s.hub.DisconnectAgent(deleted.ID, "account_deleted")
+	s.hub.BroadcastAdmins(realtime.Event{Event: "agent.deleted", Data: deleted})
+	return deleted, nil
+}
+
 func (s *Service) RegisterAgentPushDevice(agentID string, device domain.PushDevice) (domain.PushDevice, error) {
 	registered, err := s.store.RegisterAgentPushDevice(agentID, device)
 	if err != nil {

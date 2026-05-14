@@ -24,7 +24,8 @@
             <text class="last">{{ item.last_message }}</text>
           </view>
         </view>
-        <button class="close-btn" @tap.stop="closeItem(item)">强关</button>
+        <button v-if="item.status === 'closed'" class="delete-btn" @tap.stop="deleteItem(item)">删除</button>
+        <button v-else class="close-btn" @tap.stop="closeItem(item)">强关</button>
       </view>
     </scroll-view>
 
@@ -54,8 +55,11 @@
         </view>
       </scroll-view>
       <view class="detail-footer">
-        <button class="transfer" @tap="transfer">强制转接</button>
-        <button class="danger" @tap="closeCurrent">强制结束</button>
+        <button v-if="current && current.status === 'closed'" class="danger full" @tap="deleteCurrent">删除会话</button>
+        <template v-else>
+          <button class="transfer" @tap="transfer">强制转接</button>
+          <button class="danger" @tap="closeCurrent">强制结束</button>
+        </template>
       </view>
     </view>
 
@@ -64,7 +68,7 @@
 </template>
 
 <script>
-import { closeConversation, exportConversationsCSV, fetchAgents, fetchConversations, fetchMessages, getAPIBase, transferConversation } from '../../common/api.js'
+import { closeConversation, deleteConversation, exportConversationsCSV, fetchAgents, fetchConversations, fetchMessages, getAPIBase, transferConversation } from '../../common/api.js'
 import { connectRealtime, onRealtime } from '../../common/realtime.js'
 import AdminTabBar from '../../components/AdminTabBar.vue'
 
@@ -143,6 +147,23 @@ export default {
       uni.showToast({ title: '会话已强关', icon: 'none' })
       this.load()
     },
+    deleteItem(item) {
+      uni.showModal({
+        title: '删除会话',
+        content: '确定删除这条已结束会话吗？删除后会话记录和评价会一起移除。',
+        confirmColor: '#ef4444',
+        success: async (res) => {
+          if (!res.confirm) return
+          await deleteConversation(item.id)
+          if (this.current && this.current.id === item.id) {
+            this.detailVisible = false
+            this.current = null
+          }
+          uni.showToast({ title: '会话已删除', icon: 'none' })
+          this.load()
+        }
+      })
+    },
     async openDetail(item) {
       this.current = item
       const data = await fetchMessages(item.id, { limit: 50 })
@@ -212,6 +233,10 @@ export default {
       if (!this.current) return
       await this.closeItem(this.current)
       this.detailVisible = false
+    },
+    deleteCurrent() {
+      if (!this.current) return
+      this.deleteItem(this.current)
     },
     statusText(status) {
       const map = {
@@ -341,12 +366,19 @@ export default {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.close-btn {
+.close-btn,
+.delete-btn {
   margin-left: 16rpx;
-  color: #ef4444;
   background: #fff;
-  border: 1px solid #fecaca;
   font-size: 24rpx;
+}
+.close-btn {
+  color: #ef4444;
+  border: 1px solid #fecaca;
+}
+.delete-btn {
+  color: #576b95;
+  border: 1px solid #c7d2fe;
 }
 .detail-page {
   position: fixed;
@@ -489,6 +521,9 @@ export default {
   flex: 1;
   font-size: 30rpx;
   border-radius: 8rpx;
+}
+.full {
+  flex: 1;
 }
 .transfer {
   background: #fff;

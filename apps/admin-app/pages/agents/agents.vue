@@ -48,6 +48,7 @@
           <button class="secondary" @tap="saveCurrent">保存修改</button>
           <button class="outline" @tap="confirmReset">生成临时密码</button>
           <button class="danger" @tap="confirmDisable">禁用此账号</button>
+          <button class="delete" @tap="confirmDelete">删除此账号</button>
         </view>
       </scroll-view>
     </view>
@@ -90,7 +91,7 @@
 </template>
 
 <script>
-import { createAgent, disableAgent, fetchAgents, resetAgentPassword, updateAgent } from '../../common/api.js'
+import { createAgent, deleteAgent, disableAgent, fetchAgents, resetAgentPassword, updateAgent } from '../../common/api.js'
 import AdminTabBar from '../../components/AdminTabBar.vue'
 
 export default {
@@ -209,6 +210,21 @@ export default {
           this.detailVisible = false
           await this.load()
           this.toast('账号已禁用')
+        }
+      })
+    },
+    confirmDelete() {
+      uni.showModal({
+        title: '删除客服账号',
+        content: '确定删除该客服账号吗？删除后账号无法登录，历史会话会保留但不再关联此账号。',
+        confirmColor: '#ef4444',
+        success: async (res) => {
+          if (!res.confirm || !this.current) return
+          await deleteAgent(this.current.id)
+          this.detailVisible = false
+          this.current = null
+          await this.load()
+          this.toast('账号已删除')
         }
       })
     },
@@ -422,7 +438,7 @@ export default {
 .create-form {
   margin-top: 16rpx;
 }
-.secondary, .outline, .danger {
+.secondary, .outline, .danger, .delete {
   margin-bottom: 24rpx;
   border-radius: 8rpx;
   font-size: 30rpx;
@@ -440,5 +456,10 @@ export default {
 .danger {
   background: #ef4444;
   color: #fff;
+}
+.delete {
+  background: #fff;
+  color: #dc2626;
+  border: 1px solid #fecaca;
 }
 </style>

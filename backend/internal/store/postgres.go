@@ -1471,6 +1471,79 @@ func (s *PostgresStore) DisableAgent(id string) (domain.Agent, error) {
 	return out, err
 }
 
+func (s *PostgresStore) DeleteAgent(id string) (domain.Agent, error) {
+	ctx, cancel := dbContext()
+	defer cancel()
+
+	var out domain.Agent
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		agent, err := s.agentByIDForUpdateTx(ctx, tx, id)
+		if err != nil {
+			return mapNoRows(err)
+		}
+		now := dbNow()
+		if _, err := tx.Exec(ctx, `
+			UPDATE agents
+			SET status=$2, current_conversations=0, updated_at=$3
+			WHERE id=$1
+		`, agent.ID, domain.AgentOffline, now); err != nil {
+			return err
+		}
+		if err := s.revokeAuthSessionsTx(ctx, tx, domain.AccountAgent, agent.ID); err != nil {
+			return err
+		}
+		rows, err := tx.Query(ctx, `
+			SELECT `+conversationColumns+`
+			FROM conversations
+			WHERE assigned_agent_id=$1 AND status <> $2
+			ORDER BY created_at
+			FOR UPDATE
+		`, id, domain.ConversationClosed)
+		if err != nil {
+			return err
+		}
+		conversations, err := scanConversations(rows)
+		rows.Close()
+		if err != nil {
+			return err
+		}
+		for _, conversation := range conversations {
+			conversation.AssignedAgentID = ""
+			conversation.Status = domain.ConversationWaiting
+			conversation.UpdatedAt = now
+			if _, err := tx.Exec(ctx, `
+				UPDATE conversations SET assigned_agent_id=NULL, status=$2, updated_at=$3 WHERE id=$1
+			`, conversation.ID, conversation.Status, conversation.UpdatedAt); err != nil {
+				return err
+			}
+			if err := s.assignConversationTx(ctx, tx, &conversation); err != nil {
+				return err
+			}
+			if conversation.AssignedAgentID == "" {
+				ai, err := s.aiSettingsTx(ctx, tx)
+				if err != nil {
+					return err
+				}
+				if ai.Enabled && ai.Mode != domain.AIModeManualOnly {
+					if err := s.updateConversationFieldsTx(ctx, tx, conversation.ID, map[string]any{"status": domain.ConversationAIServing, "updated_at": now}); err != nil {
+						return err
+					}
+				}
+			}
+		}
+		if _, err := tx.Exec(ctx, `UPDATE conversations SET assigned_agent_id=NULL, updated_at=$2 WHERE assigned_agent_id=$1`, agent.ID, now); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE service_ratings SET assigned_agent_id='' WHERE assigned_agent_id=$1`, agent.ID); err != nil {
+			return err
+		}
+		row := tx.QueryRow(ctx, `DELETE FROM agents WHERE id=$1 RETURNING `+agentColumns, agent.ID)
+		out, err = scanAgent(row)
+		return err
+	})
+	return out, err
+}
+
 func (s *PostgresStore) RegisterAgentPushDevice(agentID string, device domain.PushDevice) (domain.PushDevice, error) {
 	ctx, cancel := dbContext()
 	defer cancel()

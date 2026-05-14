@@ -30,10 +30,14 @@
       </view>
     </view>
     <view class="status-card">
-      <text class="status-title">系统状态通知</text>
-      <text class="status-line">● OpenAI 接口配置已加载</text>
-      <text class="status-line">● WebSocket 服务正常</text>
-      <text class="status-line">● 在线客服 {{ stats.online_agents }} / {{ stats.total_agents }}</text>
+      <view class="status-head">
+        <text class="status-title">系统状态通知</text>
+        <text class="status-time">{{ systemStatusTime }}</text>
+      </view>
+      <view v-for="line in systemStatusLines" :key="line.key" class="status-line">
+        <text :class="['status-dot', line.level]"></text>
+        <text>{{ line.text }}</text>
+      </view>
     </view>
     <view class="ratings-card">
       <view class="ratings-head">
@@ -51,8 +55,8 @@
 </template>
 
 <script>
-import { fetchDashboard, fetchRatings } from '../../common/api.js'
-import { connectRealtime, onRealtime } from '../../common/realtime.js'
+import { fetchDashboard, fetchRatings, fetchSystemStatus } from '../../common/api.js'
+import { connectRealtime, getRealtimeState, onRealtime, onRealtimeState } from '../../common/realtime.js'
 import AdminTabBar from '../../components/AdminTabBar.vue'
 
 export default {
@@ -70,7 +74,10 @@ export default {
         rating: { total: 0, average: 0, satisfaction_rate: 0 }
       },
       ratings: [],
-      offRealtime: null
+      systemStatus: null,
+      realtimeState: getRealtimeState(),
+      offRealtime: null,
+      offRealtimeState: null
     }
   },
   onShow() {
@@ -78,12 +85,18 @@ export default {
     this.load()
     if (!this.offRealtime) {
       this.offRealtime = onRealtime((payload) => {
-        if (String(payload.event).indexOf('conversation.') === 0) this.load()
+        if (String(payload.event).indexOf('conversation.') === 0 || String(payload.event).indexOf('agent.') === 0) this.load()
+      })
+    }
+    if (!this.offRealtimeState) {
+      this.offRealtimeState = onRealtimeState((state) => {
+        this.realtimeState = state
       })
     }
   },
   onUnload() {
     if (this.offRealtime) this.offRealtime()
+    if (this.offRealtimeState) this.offRealtimeState()
   },
   computed: {
     averageScore() {
@@ -95,15 +108,76 @@ export default {
       const rating = this.stats && this.stats.rating ? this.stats.rating : {}
       const rate = Number(rating.satisfaction_rate || 0)
       return rating.total ? `${Math.round(rate * 100)}%` : '-'
+    },
+    systemStatusTime() {
+      const value = this.systemStatus && this.systemStatus.time
+      return value ? `更新 ${String(value).replace('T', ' ').slice(11, 16)}` : '实时检测'
+    },
+    systemStatusLines() {
+      const status = this.systemStatus || {}
+      const database = status.database || {}
+      const ai = status.ai || {}
+      const socket = this.realtimeState || {}
+      const hub = status.websocket || {}
+      const lines = []
+
+      if (!this.systemStatus) {
+        lines.push({ key: 'loading', level: 'warn', text: '正在读取后端真实状态...' })
+      } else {
+        lines.push({
+          key: 'database',
+          level: database.ok ? 'ok' : 'bad',
+          text: database.ok ? '数据库连接正常' : `数据库连接异常：${database.message || '未知错误'}`
+        })
+        if (!ai.enabled) {
+          lines.push({ key: 'ai', level: 'warn', text: 'AI 接待已关闭' })
+        } else if (ai.configured) {
+          lines.push({ key: 'ai', level: 'ok', text: `AI 配置已加载：${ai.model || '-'} / ${ai.api_type || '-'}` })
+        } else {
+          lines.push({ key: 'ai', level: 'bad', text: 'AI 配置不完整：请检查 Base URL、Model 和 API Key' })
+        }
+      }
+
+      lines.push({
+        key: 'websocket',
+        level: socket.connected ? 'ok' : (socket.connecting ? 'warn' : 'bad'),
+        text: socket.connected
+          ? `WebSocket 已连接（管理端 ${Number(hub.Admins || hub.admins || 0)}）`
+          : (socket.connecting ? 'WebSocket 正在连接...' : `WebSocket 未连接${socket.last_error ? '：' + socket.last_error : ''}`)
+      })
+      lines.push({ key: 'agents', level: 'ok', text: `在线客服 ${statsSafe(this.stats.online_agents)} / ${statsSafe(this.stats.total_agents)}` })
+      return lines
     }
   },
   methods: {
     async load() {
-      this.stats = await fetchDashboard()
-      const data = await fetchRatings(5)
-      this.ratings = data.ratings || []
+      try {
+        this.stats = await fetchDashboard()
+      } catch (err) {
+        uni.showToast({ title: err.message || '概览加载失败', icon: 'none' })
+      }
+      try {
+        const data = await fetchRatings(5)
+        this.ratings = data.ratings || []
+      } catch (err) {
+        this.ratings = []
+      }
+      try {
+        this.systemStatus = await fetchSystemStatus()
+      } catch (err) {
+        this.systemStatus = {
+          database: { ok: false, message: err.message || '状态接口不可用' },
+          ai: { enabled: false, configured: false },
+          websocket: {},
+          time: new Date().toISOString()
+        }
+      }
     }
   }
+}
+
+function statsSafe(value) {
+  return Number(value || 0)
 }
 </script>
 
@@ -162,14 +236,36 @@ export default {
   flex-direction: column;
   gap: 16rpx;
 }
+.status-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
 .status-title {
   color: #6b7280;
   font-size: 26rpx;
 }
+.status-time {
+  color: #9ca3af;
+  font-size: 22rpx;
+}
 .status-line {
   color: #111827;
   font-size: 28rpx;
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
 }
+.status-dot {
+  width: 14rpx;
+  height: 14rpx;
+  border-radius: 50%;
+  background: #9ca3af;
+  flex-shrink: 0;
+}
+.status-dot.ok { background: #07c160; }
+.status-dot.warn { background: #f59e0b; }
+.status-dot.bad { background: #ef4444; }
 .ratings-card {
   margin-top: 16rpx;
   background: #fff;

@@ -282,6 +282,40 @@ func NewRouter(cfg config.Config, logger *slog.Logger, service *app.Service) htt
 		writeJSON(w, http.StatusOK, service.Store().DashboardStats())
 	})
 
+	mux.HandleFunc("GET /api/admin/system-status", func(w http.ResponseWriter, r *http.Request) {
+		if !isAdmin(service, r) {
+			writeError(w, store.ErrForbidden)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		database := map[string]any{"ok": true}
+		if err := service.Store().Ping(ctx); err != nil {
+			database = map[string]any{
+				"ok":      false,
+				"message": err.Error(),
+			}
+		}
+		aiSettings := service.Store().AISettings()
+		aiConfigured := strings.TrimSpace(aiSettings.BaseURL) != "" &&
+			strings.TrimSpace(aiSettings.Model) != "" &&
+			strings.TrimSpace(aiSettings.APIKeyMasked) != ""
+		writeJSON(w, http.StatusOK, map[string]any{
+			"database": database,
+			"ai": map[string]any{
+				"enabled":        aiSettings.Enabled,
+				"configured":     aiConfigured,
+				"mode":           aiSettings.Mode,
+				"base_url":       aiSettings.BaseURL,
+				"model":          aiSettings.Model,
+				"api_type":       aiSettings.APIType,
+				"api_key_masked": aiSettings.APIKeyMasked,
+			},
+			"websocket": service.Hub().Stats(),
+			"time":      time.Now().UTC().Format(time.RFC3339),
+		})
+	})
+
 	mux.HandleFunc("GET /api/admin/agents", func(w http.ResponseWriter, r *http.Request) {
 		if !isAdmin(service, r) {
 			writeError(w, store.ErrForbidden)
@@ -416,6 +450,20 @@ func NewRouter(cfg config.Config, logger *slog.Logger, service *app.Service) htt
 			return
 		}
 		recordAuditFromRequest(service, r, trustedProxies, "agent.disable", "agent", agent.ID, "禁用客服账号 "+agent.Account)
+		writeJSON(w, http.StatusOK, map[string]any{"agent": agent})
+	})
+
+	mux.HandleFunc("DELETE /api/admin/agents/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if !isAdmin(service, r) {
+			writeError(w, store.ErrForbidden)
+			return
+		}
+		agent, err := service.DeleteAgent(r.PathValue("id"))
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		recordAuditFromRequest(service, r, trustedProxies, "agent.delete", "agent", agent.ID, "删除客服账号 "+agent.Account)
 		writeJSON(w, http.StatusOK, map[string]any{"agent": agent})
 	})
 
@@ -642,6 +690,13 @@ func NewRouter(cfg config.Config, logger *slog.Logger, service *app.Service) htt
 			Input string `json:"input"`
 		}
 		if !decodeOptionalJSON(w, r, &req) {
+			return
+		}
+		if strings.TrimSpace(service.Store().AISettings().APIKey) == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]any{
+				"error":   "ai_api_key_missing",
+				"message": "AI API Key 未配置，无法进行真实接口联调",
+			})
 			return
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)

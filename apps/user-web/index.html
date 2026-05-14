@@ -582,6 +582,8 @@
             connected: false,
             selectedRatingScore: 0,
             ratingSubmitted: false,
+            ratingPromptVisible: false,
+            evalReturnMessage: '',
             renderedServerMsgIds: new Set(),
             renderedClientMsgIds: new Set(),
             hasMoreHistory: false,
@@ -1004,6 +1006,8 @@
             State.conversationId = '';
             State.selectedRatingScore = 0;
             State.ratingSubmitted = false;
+            State.ratingPromptVisible = false;
+            State.evalReturnMessage = '';
             State.renderedServerMsgIds = new Set();
             State.renderedClientMsgIds = new Set();
             State.hasMoreHistory = false;
@@ -1069,6 +1073,19 @@
             DOM.entryBtn.textContent = '咨询客服';
             showEntryView();
             if (message) showToast(message);
+        }
+
+        function promptForRatingOrReturn(message = '会话已结束') {
+            State.pendingReturnToEntry = false;
+            State.connected = false;
+            disconnectSocket();
+            updateSessionState('ENDED');
+            if (!State.visitorToken || !State.conversationId || State.ratingSubmitted) {
+                returnToEntry(message);
+                return;
+            }
+            State.evalReturnMessage = message;
+            showEvalSheet();
         }
 
         async function openConsultation() {
@@ -1511,7 +1528,6 @@
             }
             else if (action === 'end') {
                 if (State.sessionType === 'ENDED' || State.pendingReturnToEntry) return;
-                clearVisitorSession();
                 if (State.connected) {
                     State.pendingReturnToEntry = true;
                     updateSessionState('ENDED');
@@ -1521,11 +1537,11 @@
                     }));
                     setTimeout(() => {
                         if (State.pendingReturnToEntry) {
-                            returnToEntry("会话已结束");
+                            promptForRatingOrReturn("会话已结束");
                         }
                     }, 600);
                 } else {
-                    returnToEntry("会话已结束");
+                    promptForRatingOrReturn("会话已结束");
                 }
             }
         }
@@ -1718,7 +1734,7 @@
             } else if (conversation.status === 'waiting' || conversation.status === 'human_requested') {
                 updateSessionState('QUEUING');
             } else if (conversation.status === 'closed') {
-                returnToEntry("会话已结束");
+                promptForRatingOrReturn("会话已结束");
                 return;
             }
             saveVisitorSession();
@@ -1726,6 +1742,8 @@
 
         // === 评价组件逻辑 ===
         function showEvalSheet() {
+            if (State.ratingPromptVisible) return;
+            State.ratingPromptVisible = true;
             DOM.evalOverlay.classList.remove('hidden');
             DOM.evalOverlay.classList.add('flex');
             gsap.to(DOM.evalSheet, { y: 0, duration: 0.3, ease: "power3.out" });
@@ -1742,6 +1760,12 @@
             gsap.to(DOM.evalSheet, { y: '100%', duration: 0.2, ease: "power2.in", onComplete: () => {
                 DOM.evalOverlay.classList.remove('flex');
                 DOM.evalOverlay.classList.add('hidden');
+                State.ratingPromptVisible = false;
+                if (State.evalReturnMessage) {
+                    const message = State.evalReturnMessage;
+                    State.evalReturnMessage = '';
+                    returnToEntry(message);
+                }
             }});
         }
 
