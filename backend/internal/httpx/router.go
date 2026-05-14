@@ -138,7 +138,7 @@ func NewRouter(cfg config.Config, logger *slog.Logger, service *app.Service) htt
 		if !decodeJSON(w, r, &req) {
 			return
 		}
-		rating, err := service.Store().SubmitRating(conversationID, req.Score, req.Tags, req.Comment)
+		rating, err := service.SubmitRating(conversationID, req.Score, req.Tags, req.Comment)
 		if err != nil {
 			writeError(w, err)
 			return

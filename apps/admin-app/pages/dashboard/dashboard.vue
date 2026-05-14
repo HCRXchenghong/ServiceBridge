@@ -85,7 +85,8 @@ export default {
     this.load()
     if (!this.offRealtime) {
       this.offRealtime = onRealtime((payload) => {
-        if (String(payload.event).indexOf('conversation.') === 0 || String(payload.event).indexOf('agent.') === 0) this.load()
+        const event = String(payload.event || '')
+        if (event.indexOf('conversation.') === 0 || event.indexOf('agent.') === 0 || event.indexOf('rating.') === 0) this.load()
       })
     }
     if (!this.offRealtimeState) {

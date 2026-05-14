@@ -100,6 +100,15 @@ func (s *Service) TestAIReply(ctx context.Context, userText string) (string, err
 	return s.ai.Reply(ctx, s.store.AISettings(), s.store.ContactSettings(), userText)
 }
 
+func (s *Service) SubmitRating(conversationID string, score int, tags []string, comment string) (domain.ServiceRating, error) {
+	rating, err := s.store.SubmitRating(conversationID, score, tags, comment)
+	if err != nil {
+		return domain.ServiceRating{}, err
+	}
+	s.hub.BroadcastAdmins(realtime.Event{Event: "rating.created", Data: rating})
+	return rating, nil
+}
+
 func (s *Service) CreateVisitorConversation(ip, source string) (domain.VisitorSession, error) {
 	session, err := s.store.CreateVisitorConversation(ip, source)
 	if err != nil {
