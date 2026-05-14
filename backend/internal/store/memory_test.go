@@ -84,6 +84,42 @@ func TestHumanKeywordDoesNotDoubleCountAssignedAgent(t *testing.T) {
 	}
 }
 
+func TestAgentOfflineReleasesConversationBackToAI(t *testing.T) {
+	s := NewMemoryStore(Options{})
+	_, agent, err := s.LoginAgent("admin", "123456")
+	if err != nil {
+		t.Fatalf("login agent: %v", err)
+	}
+	if _, _, err := s.SetAgentStatus(agent.ID, domain.AgentOnline); err != nil {
+		t.Fatalf("set agent online: %v", err)
+	}
+	visitor, err := s.CreateVisitorConversation("192.0.2.188", "web")
+	if err != nil {
+		t.Fatalf("create visitor conversation: %v", err)
+	}
+	if visitor.Conversation.AssignedAgentID != agent.ID {
+		t.Fatalf("expected conversation assigned to agent, got %q", visitor.Conversation.AssignedAgentID)
+	}
+
+	updatedAgent, changed, err := s.SetAgentStatus(agent.ID, domain.AgentOffline)
+	if err != nil {
+		t.Fatalf("set agent offline: %v", err)
+	}
+
+	if updatedAgent.CurrentConversations != 0 {
+		t.Fatalf("expected no current conversations, got %d", updatedAgent.CurrentConversations)
+	}
+	if len(changed) != 1 {
+		t.Fatalf("expected one changed conversation, got %d", len(changed))
+	}
+	if changed[0].AssignedAgentID != "" {
+		t.Fatalf("conversation should be released from agent, got %q", changed[0].AssignedAgentID)
+	}
+	if changed[0].Status != domain.ConversationAIServing {
+		t.Fatalf("expected conversation back to AI, got %s", changed[0].Status)
+	}
+}
+
 func TestPhoneKeywordGeneratesStructuredContactReply(t *testing.T) {
 	s := NewMemoryStore(Options{})
 	visitor, err := s.CreateVisitorConversation("192.0.2.19", "web")

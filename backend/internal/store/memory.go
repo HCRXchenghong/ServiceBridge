@@ -275,6 +275,24 @@ func (s *MemoryStore) SetAgentStatus(agentID string, status domain.AgentStatus) 
 	agent.Updated = time.Now().UTC()
 
 	assigned := []domain.Conversation{}
+	if status == domain.AgentOffline {
+		now := time.Now().UTC()
+		agent.CurrentConversations = 0
+		for _, conversation := range s.conversations {
+			if conversation.AssignedAgentID != agent.ID || conversation.Status == domain.ConversationClosed {
+				continue
+			}
+			conversation.AssignedAgentID = ""
+			conversation.Status = domain.ConversationWaiting
+			conversation.UpdatedAt = now
+			s.assignConversationLocked(conversation)
+			if conversation.AssignedAgentID == "" && s.ai.Enabled && s.ai.Mode != domain.AIModeManualOnly {
+				conversation.Status = domain.ConversationAIServing
+				conversation.UpdatedAt = now
+			}
+			assigned = append(assigned, *conversation)
+		}
+	}
 	if status == domain.AgentOnline {
 		conversations := s.sortedConversationsLocked()
 		for _, conversation := range conversations {

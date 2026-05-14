@@ -131,8 +131,11 @@ func (s *Service) SetAgentStatus(agentID string, status domain.AgentStatus) (dom
 	}
 	s.hub.BroadcastAdmins(realtime.Event{Event: "agent.status_changed", Data: agent})
 	for _, conversation := range assigned {
-		s.hub.SendToAgent(agent.ID, realtime.Event{Event: "conversation.assigned", Data: conversation})
+		if conversation.AssignedAgentID != "" {
+			s.hub.SendToAgent(conversation.AssignedAgentID, realtime.Event{Event: "conversation.assigned", Data: conversation})
+		}
 		s.hub.SendToVisitor(conversation.ID, realtime.Event{Event: "conversation.status_changed", Data: conversation})
+		s.hub.BroadcastAdmins(realtime.Event{Event: "conversation.status_changed", Data: conversation})
 	}
 	return agent, nil
 }

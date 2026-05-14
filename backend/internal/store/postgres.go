@@ -277,6 +277,55 @@ func (s *PostgresStore) SetAgentStatus(agentID string, status domain.AgentStatus
 			return err
 		}
 
+		if status == domain.AgentOffline {
+			agent.CurrentConversations = 0
+			if _, err := tx.Exec(ctx, `UPDATE agents SET current_conversations=0, updated_at=$2 WHERE id=$1`, agent.ID, now); err != nil {
+				return err
+			}
+			rows, err := tx.Query(ctx, `
+				SELECT `+conversationColumns+`
+				FROM conversations
+				WHERE assigned_agent_id=$1 AND status <> $2
+				ORDER BY created_at
+				FOR UPDATE
+			`, agent.ID, domain.ConversationClosed)
+			if err != nil {
+				return err
+			}
+			conversations, err := scanConversations(rows)
+			rows.Close()
+			if err != nil {
+				return err
+			}
+			for _, conversation := range conversations {
+				conversation.AssignedAgentID = ""
+				conversation.Status = domain.ConversationWaiting
+				conversation.UpdatedAt = now
+				if _, err := tx.Exec(ctx, `
+					UPDATE conversations SET assigned_agent_id=NULL, status=$2, updated_at=$3 WHERE id=$1
+				`, conversation.ID, conversation.Status, conversation.UpdatedAt); err != nil {
+					return err
+				}
+				if err := s.assignConversationTx(ctx, tx, &conversation); err != nil {
+					return err
+				}
+				if conversation.AssignedAgentID == "" {
+					ai, err := s.aiSettingsTx(ctx, tx)
+					if err != nil {
+						return err
+					}
+					if ai.Enabled && ai.Mode != domain.AIModeManualOnly {
+						conversation.Status = domain.ConversationAIServing
+						conversation.UpdatedAt = now
+						if err := s.updateConversationFieldsTx(ctx, tx, conversation.ID, map[string]any{"status": conversation.Status, "updated_at": now}); err != nil {
+							return err
+						}
+					}
+				}
+				assigned = append(assigned, conversation)
+			}
+		}
+
 		if status == domain.AgentOnline {
 			for agent.CurrentConversations < agent.MaxConversations {
 				conversation, err := s.nextWaitingConversationForUpdateTx(ctx, tx)
