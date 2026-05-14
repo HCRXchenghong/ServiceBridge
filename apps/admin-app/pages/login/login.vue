@@ -62,7 +62,7 @@ export default {
   justify-content: center;
   flex-direction: column;
   background: #ffffff;
-  padding: 0 64rpx;
+  padding: calc(var(--status-bar-height, 0px) + 48rpx) 64rpx calc(env(safe-area-inset-bottom, 0px) + 48rpx);
   box-sizing: border-box;
 }
 .shield {

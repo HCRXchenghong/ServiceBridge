@@ -101,6 +101,9 @@ func (s *Service) TestAIReply(ctx context.Context, userText string) (string, err
 }
 
 func (s *Service) SubmitRating(conversationID string, score int, tags []string, comment string) (domain.ServiceRating, error) {
+	if score < 5 && strings.TrimSpace(comment) == "" {
+		return domain.ServiceRating{}, store.ErrInvalidInput
+	}
 	rating, err := s.store.SubmitRating(conversationID, score, tags, comment)
 	if err != nil {
 		return domain.ServiceRating{}, err

@@ -1,55 +1,60 @@
 <template>
-  <view class="page">
+  <view class="page safe-page">
     <view class="header safe-header">
       <text class="title">数据概览</text>
     </view>
-    <view class="grid">
-      <view class="card">
-        <text class="label">当前会话</text>
-        <text class="value">{{ stats.active_conversations }}</text>
+    <scroll-view class="content flex-scroll" scroll-y>
+      <view class="grid">
+        <view class="card">
+          <text class="label">当前会话</text>
+          <text class="value">{{ stats.active_conversations }}</text>
+        </view>
+        <view class="card">
+          <text class="label">AI 接待中</text>
+          <text class="value green">{{ stats.ai_serving }}</text>
+        </view>
+        <view class="card">
+          <text class="label">当前排队</text>
+          <text class="value orange">{{ stats.waiting + stats.human_requested }}</text>
+        </view>
+        <view class="card">
+          <text class="label">人工接待</text>
+          <text class="value blue">{{ stats.assigned }}</text>
+        </view>
+        <view class="card">
+          <text class="label">评价均分</text>
+          <text class="value blue">{{ averageScore }}</text>
+        </view>
+        <view class="card">
+          <text class="label">满意率</text>
+          <text class="value green">{{ satisfactionRate }}</text>
+        </view>
       </view>
-      <view class="card">
-        <text class="label">AI 接待中</text>
-        <text class="value green">{{ stats.ai_serving }}</text>
+      <view class="status-card">
+        <view class="status-head">
+          <text class="status-title">系统状态通知</text>
+          <text class="status-time">{{ systemStatusTime }}</text>
+        </view>
+        <view v-for="line in systemStatusLines" :key="line.key" class="status-line">
+          <text :class="['status-dot', line.level]"></text>
+          <text>{{ line.text }}</text>
+        </view>
       </view>
-      <view class="card">
-        <text class="label">当前排队</text>
-        <text class="value orange">{{ stats.waiting + stats.human_requested }}</text>
+      <view class="ratings-card">
+        <view class="ratings-head">
+          <text class="status-title">最近服务评价</text>
+          <text class="rating-count">{{ stats.rating.total }} 条</text>
+        </view>
+        <view v-if="!ratings.length" class="empty">暂无评价</view>
+        <view v-for="item in ratings" :key="item.id" class="rating-row">
+          <text :class="['rating-score', item.score < 5 ? 'warning' : '']">{{ item.score }} 分</text>
+          <view class="rating-main">
+            <text class="rating-comment">{{ ratingTagsText(item) }}</text>
+            <text v-if="ratingAdviceText(item)" :class="['rating-advice', item.score < 5 ? 'warning' : '']">建议：{{ ratingAdviceText(item) }}</text>
+          </view>
+        </view>
       </view>
-      <view class="card">
-        <text class="label">人工接待</text>
-        <text class="value blue">{{ stats.assigned }}</text>
-      </view>
-      <view class="card">
-        <text class="label">评价均分</text>
-        <text class="value blue">{{ averageScore }}</text>
-      </view>
-      <view class="card">
-        <text class="label">满意率</text>
-        <text class="value green">{{ satisfactionRate }}</text>
-      </view>
-    </view>
-    <view class="status-card">
-      <view class="status-head">
-        <text class="status-title">系统状态通知</text>
-        <text class="status-time">{{ systemStatusTime }}</text>
-      </view>
-      <view v-for="line in systemStatusLines" :key="line.key" class="status-line">
-        <text :class="['status-dot', line.level]"></text>
-        <text>{{ line.text }}</text>
-      </view>
-    </view>
-    <view class="ratings-card">
-      <view class="ratings-head">
-        <text class="status-title">最近服务评价</text>
-        <text class="rating-count">{{ stats.rating.total }} 条</text>
-      </view>
-      <view v-if="!ratings.length" class="empty">暂无评价</view>
-      <view v-for="item in ratings" :key="item.id" class="rating-row">
-        <text class="rating-score">{{ item.score }} 分</text>
-        <text class="rating-comment">{{ (item.tags || []).join('、') || item.comment || '未填写评价内容' }}</text>
-      </view>
-    </view>
+    </scroll-view>
     <admin-tab-bar active="dashboard" />
   </view>
 </template>
@@ -173,6 +178,18 @@ export default {
           time: new Date().toISOString()
         }
       }
+    },
+    ratingTagsText(item) {
+      const tags = (item && item.tags ? item.tags : []).filter(Boolean)
+      return tags.join('、') || this.scoreText(item && item.score)
+    },
+    ratingAdviceText(item) {
+      return String((item && item.comment) || '').trim()
+    },
+    scoreText(score) {
+      if (Number(score) >= 5) return '非常满意'
+      if (Number(score) >= 3) return '一般'
+      return '不满意'
     }
   }
 }
@@ -184,10 +201,7 @@ function statsSafe(value) {
 
 <style scoped>
 .page {
-  min-height: 100vh;
   background: #ededed;
-  padding-bottom: 120rpx;
-  box-sizing: border-box;
 }
 .header {
   height: 100rpx;
@@ -228,6 +242,10 @@ function statsSafe(value) {
 .green { color: #07c160; }
 .orange { color: #f97316; }
 .blue { color: #576b95; }
+.content {
+  padding-bottom: 120rpx;
+  box-sizing: border-box;
+}
 .status-card {
   background: #fff;
   padding: 28rpx 32rpx;
@@ -292,14 +310,32 @@ function statsSafe(value) {
   color: #f59e0b;
   font-size: 28rpx;
   font-weight: 600;
+  flex-shrink: 0;
+}
+.rating-score.warning {
+  color: #ef4444;
+}
+.rating-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
 }
 .rating-comment {
-  flex: 1;
   color: #4b5563;
   font-size: 26rpx;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.rating-advice {
+  color: #6b7280;
+  font-size: 24rpx;
+  line-height: 1.45;
+}
+.rating-advice.warning {
+  color: #b45309;
 }
 .empty {
   color: #9ca3af;

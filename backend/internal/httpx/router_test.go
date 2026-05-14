@@ -507,7 +507,8 @@ func TestVisitorRatingAndAdminSummary(t *testing.T) {
 		t.Fatalf("unexpected rating score: %v", got)
 	}
 	doJSON(t, server, http.MethodPost, "/api/visitor/conversations/"+conversationID+"/rating", visitorToken, map[string]any{
-		"score": 4,
+		"score":   4,
+		"comment": "重复评价",
 	}, http.StatusConflict)
 
 	summary := doJSON(t, server, http.MethodGet, "/api/admin/ratings/summary", adminToken, nil, http.StatusOK)

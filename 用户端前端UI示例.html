@@ -264,6 +264,16 @@
                     </div>
                 </div>
 
+                <div id="eval-advice-box" class="hidden mb-5">
+                    <label class="block text-sm text-gray-600 mb-2">请告诉我们哪里做得不够好</label>
+                    <textarea
+                        id="eval-advice"
+                        class="w-full min-h-[96px] bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 resize-none focus:outline-none focus:border-[#07c160]"
+                        maxlength="300"
+                        placeholder="请输入您的建议，管理端会看到这条反馈"
+                    ></textarea>
+                </div>
+
                 <button class="w-full bg-[#07c160] text-white py-3 rounded-lg font-medium active:bg-[#06ad56]" onclick="submitEval()">提交评价</button>
             </div>
         </div>
@@ -309,6 +319,8 @@
             toast: document.getElementById('toast'),
             evalOverlay: document.getElementById('eval-overlay'),
             evalSheet: document.getElementById('eval-sheet'),
+            evalAdviceBox: document.getElementById('eval-advice-box'),
+            evalAdvice: document.getElementById('eval-advice'),
             sound: document.getElementById('sound-new-msg'),
             btnSound: document.getElementById('btn-sound')
         };
@@ -656,6 +668,9 @@
                 i.classList.remove('text-[#f5a623]');
                 i.classList.add('text-gray-300');
             });
+            State.selectedRatingScore = 0;
+            DOM.evalAdvice.value = '';
+            syncEvalAdviceBox();
         }
 
         function closeEval() {
@@ -677,8 +692,15 @@
                 this.querySelector('i').classList.remove('text-gray-300');
                 this.querySelector('i').classList.add('text-[#f5a623]');
                 State.selectedRatingScore = Number(this.dataset.score || 0);
+                syncEvalAdviceBox();
             });
         });
+
+        function syncEvalAdviceBox() {
+            const needsAdvice = State.selectedRatingScore > 0 && State.selectedRatingScore < 5;
+            DOM.evalAdviceBox.classList.toggle('hidden', !needsAdvice);
+            if (!needsAdvice) DOM.evalAdvice.value = '';
+        }
 
         async function ensureRatingConversation() {
             if (State.visitorToken && State.conversationId) return true;
@@ -705,6 +727,12 @@
                 showToast("请先选择评价等级");
                 return;
             }
+            const advice = DOM.evalAdvice.value.trim();
+            if (State.selectedRatingScore < 5 && !advice) {
+                showToast("请输入您的建议");
+                DOM.evalAdvice.focus();
+                return;
+            }
             if (State.ratingSubmitted) {
                 showToast("评价已提交");
                 closeEval();
@@ -721,7 +749,7 @@
                     body: JSON.stringify({
                         score: State.selectedRatingScore,
                         tags: ratingTags(State.selectedRatingScore),
-                        comment: ''
+                        comment: advice
                     })
                 });
                 if (!resp.ok && resp.status !== 409) throw new Error(`rating failed ${resp.status}`);
