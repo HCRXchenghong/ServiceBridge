@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="customer-service-api-base" content="">
     <title>在线客服</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
@@ -284,7 +285,12 @@
             agentAvatar: 'https://placehold.co/80x80/07c160/ffffff?text=服',
             soundEnabled: true,
             activePanel: null, // 'emoji', 'more', or null
-            unreadCount: 0
+            unreadCount: 0,
+            apiBase: inferAPIBase(),
+            visitorToken: '',
+            conversationId: '',
+            selectedRatingScore: 0,
+            ratingSubmitted: false
         };
 
         const DOM = {
@@ -311,6 +317,14 @@
         const EMOJIS = ['😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚', '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🤩', '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣'];
 
         // === 工具函数 ===
+        function inferAPIBase() {
+            const configured = document.querySelector('meta[name="customer-service-api-base"]')?.content || window.CUSTOMER_SERVICE_API_BASE || '';
+            if (configured.trim()) return configured.trim().replace(/\/$/, '');
+            if (location.protocol === 'file:') return 'http://localhost:8080';
+            if (location.port && location.port !== '8080') return `${location.protocol}//${location.hostname}:8080`;
+            return location.origin;
+        }
+
         function showToast(msg, duration = 2000) {
             DOM.toast.textContent = msg;
             gsap.to(DOM.toast, { opacity: 1, duration: 0.2 });
@@ -662,17 +676,62 @@
                 // 点亮当前
                 this.querySelector('i').classList.remove('text-gray-300');
                 this.querySelector('i').classList.add('text-[#f5a623]');
+                State.selectedRatingScore = Number(this.dataset.score || 0);
             });
         });
 
-        window.submitEval = function() {
-            const hasSelected = Array.from(document.querySelectorAll('.eval-star i')).some(i => i.classList.contains('text-[#f5a623]'));
-            if(!hasSelected) {
+        async function ensureRatingConversation() {
+            if (State.visitorToken && State.conversationId) return true;
+            const resp = await fetch(`${State.apiBase}/api/visitor/conversations`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ source: 'ui_reference' })
+            });
+            if (!resp.ok) throw new Error(`create conversation failed ${resp.status}`);
+            const data = await resp.json();
+            State.visitorToken = data.token || '';
+            State.conversationId = data.conversation?.id || '';
+            return !!State.visitorToken && !!State.conversationId;
+        }
+
+        function ratingTags(score) {
+            if (score >= 5) return ['非常满意'];
+            if (score >= 3) return ['一般'];
+            return ['不满意'];
+        }
+
+        window.submitEval = async function() {
+            if(!State.selectedRatingScore) {
                 showToast("请先选择评价等级");
                 return;
             }
-            showToast("感谢您的评价！");
-            closeEval();
+            if (State.ratingSubmitted) {
+                showToast("评价已提交");
+                closeEval();
+                return;
+            }
+            try {
+                await ensureRatingConversation();
+                const resp = await fetch(`${State.apiBase}/api/visitor/conversations/${encodeURIComponent(State.conversationId)}/rating`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${State.visitorToken}`
+                    },
+                    body: JSON.stringify({
+                        score: State.selectedRatingScore,
+                        tags: ratingTags(State.selectedRatingScore),
+                        comment: ''
+                    })
+                });
+                if (!resp.ok && resp.status !== 409) throw new Error(`rating failed ${resp.status}`);
+                State.ratingSubmitted = true;
+                showToast("感谢您的评价！");
+                closeEval();
+            } catch (err) {
+                console.error(err);
+                showToast("评价提交失败，请确认后端已启动");
+            }
         }
 
         // 顶部按钮事件
