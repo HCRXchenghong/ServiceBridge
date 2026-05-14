@@ -658,18 +658,22 @@
         }
 
         // === 评价组件逻辑 ===
-        const RATING_ACTIVE_CLASSES = ['text-[#07c160]', 'text-[#f5a623]', 'text-[#ef4444]'];
+        const RATING_ACTIVE_COLORS = {
+            satisfied: '#07c160',
+            neutral: '#f5a623',
+            unhappy: '#ef4444'
+        };
 
-        function ratingColorClass(score) {
+        function ratingColor(score) {
             const value = Number(score || 0);
-            if (value >= 5) return 'text-[#07c160]';
-            if (value >= 3) return 'text-[#f5a623]';
-            return 'text-[#ef4444]';
+            if (value >= 5) return RATING_ACTIVE_COLORS.satisfied;
+            if (value >= 3) return RATING_ACTIVE_COLORS.neutral;
+            return RATING_ACTIVE_COLORS.unhappy;
         }
 
         function resetRatingIcons() {
             document.querySelectorAll('.eval-star i').forEach(i => {
-                i.classList.remove(...RATING_ACTIVE_CLASSES);
+                i.style.color = '';
                 i.classList.add('text-gray-300');
             });
         }
@@ -700,8 +704,9 @@
                 resetRatingIcons();
                 // 点亮当前
                 const score = Number(this.dataset.score || 0);
-                this.querySelector('i').classList.remove('text-gray-300');
-                this.querySelector('i').classList.add(ratingColorClass(score));
+                const icon = this.querySelector('i');
+                icon.classList.remove('text-gray-300');
+                icon.style.color = ratingColor(score);
                 State.selectedRatingScore = score;
                 syncEvalAdviceBox();
             });
