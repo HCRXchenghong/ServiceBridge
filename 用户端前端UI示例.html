@@ -4,7 +4,34 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="customer-service-api-base" content="">
+    <meta name="description" content="点击进入在线客服，有问题随时咨询，我们会尽快为您处理。">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="在线客服">
+    <meta property="og:description" content="点击进入在线客服，有问题随时咨询，我们会尽快为您处理。">
+    <meta property="og:image" content="./apps/user-web/assets/001.png">
+    <meta property="og:url" content="./用户端前端UI示例.html">
+    <meta property="og:site_name" content="在线客服">
+    <meta itemprop="name" content="在线客服">
+    <meta itemprop="description" content="点击进入在线客服，有问题随时咨询，我们会尽快为您处理。">
+    <meta itemprop="image" content="./apps/user-web/assets/001.png">
+    <link rel="image_src" href="./apps/user-web/assets/001.png">
     <title>在线客服</title>
+    <script>
+        (() => {
+            const shareImageURL = new URL('./apps/user-web/assets/001.png', window.location.href).href;
+            const sharePageURL = window.location.href.split('#')[0];
+            const metas = [
+                ['meta[property="og:image"]', 'content', shareImageURL],
+                ['meta[itemprop="image"]', 'content', shareImageURL],
+                ['meta[property="og:url"]', 'content', sharePageURL],
+                ['link[rel="image_src"]', 'href', shareImageURL]
+            ];
+            metas.forEach(([selector, attr, value]) => {
+                const el = document.querySelector(selector);
+                if (el) el.setAttribute(attr, value);
+            });
+        })();
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
